@@ -1,5 +1,4 @@
 import '../models/word_model.dart';
-
 /// "An-Na’im al-Kubro" lug'atidagi barcha ismlar (otlar) ro'yxati.
 List<DictionaryWord> nounsData = [
   DictionaryWord(

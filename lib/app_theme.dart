@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-
 /// Ilova mavzularini markazlashtirilgan boshqarish klassi.
 /// Bu yerda faqat ranglar va shriftlar saqlanadi.
 class AppTheme {
@@ -33,7 +32,7 @@ class AppTheme {
     ),
     
     // So'z kartochkalari dizayni
-    cardTheme: CardTheme(
+    cardTheme: CardThemeData(
       color: const Color(0xFFFBFBFB), // Judayam mayin oq
       elevation: 1, // Kichik soya
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
@@ -71,7 +70,7 @@ class AppTheme {
     ),
     
     // So'z kartochkalari krem rejimida biroz yorqinroq
-    cardTheme: CardTheme(
+    cardTheme: CardThemeData(
       color: Colors.white, // Kartochkalar oq bo'lsa fonda ajralib turadi
       elevation: 1,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),

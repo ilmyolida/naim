@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'screens/home_screen.dart';
 import 'managers/preferences_manager.dart';
+import 'app_theme.dart';
+import 'package:share_plus/share_plus.dart'; // Agar siz share_plus kutubxonasini ishlatsangiz, uni import qilishingiz kerak
 
 void main() async {
   // Flutter interfeysini bog'lash (async ishlar uchun kerak)
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   // 1. Xotira boshqaruvini (PreferencesManager)initializatsiya qilish
   // Ilova boshlanishida sozlamalarni va tarixni yuklash uchun kerak.
   await PreferencesManager.init();
@@ -19,10 +21,36 @@ class AnNaimDictionaryApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
+    // ThemeMode-ni PreferencesManager orqali boshqaramiz
+    // (eski kod olib tashlandi, yangi theme boshqaruvi pastda)
+    // Uchta theme: oq, sariq (cream), qora
+    int themePref = PreferencesManager.loadThemeMode();
+    ThemeData theme;
+    ThemeMode themeMode;
+    if (themePref == 0) {
+      theme = AppTheme.lightTheme;
+      themeMode = ThemeMode.light;
+    } else if (themePref == 1) {
+      theme = AppTheme.softCreamTheme;
+      themeMode = ThemeMode.light;
+    } else {
+      theme = ThemeData.dark();
+      themeMode = ThemeMode.dark;
+    }
+    return MaterialApp(
       title: 'An-Na’im al-Kubro',
-      debugShowCheckedModeBanner: false, // Debug barini yashirish
-      home: HomeScreen(), // Boshlang'ich ekran
+      debugShowCheckedModeBanner: false,
+      theme: theme,
+      darkTheme: ThemeData.dark(),
+      themeMode: themeMode,
+      home: const HomeScreen(),
+      // Cream (yellow) mode uchun custom theme
+      builder: (context, child) {
+        if (themePref == 1) {
+          return Theme(data: AppTheme.softCreamTheme, child: child!);
+        }
+        return child!;
+      },
     );
   }
 }

@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:naim/screens/details_screen.dart';
 import '../models/word_model.dart';
-import '../data/words_data.dart';
 import '../managers/preferences_manager.dart';
 import '../app_theme.dart';
-
+import '../services/data_service.dart';
+import 'group_words_screen.dart';
 /// Ilovaning asosiy ekrani.
 /// Bu yerda qidiruv, tarix, guruhlar va ma'lumotlar jamlangan.
 class HomeScreen extends StatefulWidget {
@@ -14,6 +15,9 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+    // Sevimlilar va saqlanganlar uchun ro'yxatlar
+    List<DictionaryWord> _favorites = [];
+    List<DictionaryWord> _saved = [];
   // Qidiruv maydonini boshqarish
   final TextEditingController _searchController = TextEditingController();
   
@@ -30,14 +34,91 @@ class _HomeScreenState extends State<HomeScreen> {
   // BottomNavigationBar'ning hozirgi index'i
   int _currentNavIndex = 0;
 
-  @override
-  void initState() {
-    super.initState();
-    // Boshlang'ich holda qidiruv maydoni bo'sh bo'lsa, hech nima ko'rsatmaymiz
-    _searchResult = [];
-    _historyResult = PreferencesManager.loadHistory(); // Tarixni yuklash
-    _isExactSearch = PreferencesManager.loadExactSearch(); // Sozlamalarni yuklash
+    bool _isLoading = true; // Yuklanish indikatori uchun
+List<DictionaryWord> _allWords = []; // Baza shu yerga yuklanadi
+
+@override
+void initState() {
+  super.initState();
+  _loadAllData(); // Ma'lumotlarni yuklashni chaqiramiz
+}
+
+void _loadAllData() async {
+  final data = await DataService.loadAllData(); // TXT fayllardan o'qiydi
+  setState(() {
+    _allWords = data;
+    _historyResult = PreferencesManager.loadHistory();
+      _favorites = PreferencesManager.loadFavorites?.call() ?? [];
+      _saved = PreferencesManager.loadSaved?.call() ?? [];
+    _isExactSearch = PreferencesManager.loadExactSearch();
     _isFuzzySearch = PreferencesManager.loadFuzzySearch();
+    _isLoading = false; // Yuklab bo'lingach, ekranni ochamiz
+  });
+}
+
+  /// Tarix, Sevimlilar, Saqlanganlar uchun universal sahifa
+  Widget _buildHistoryPage(TextTheme textTheme) {
+    return DefaultTabController(
+      length: 3,
+      child: Column(
+        children: [
+          Container(
+            color: Theme.of(context).scaffoldBackgroundColor,
+            child: TabBar(
+              indicatorColor: Theme.of(context).colorScheme.primary,
+              labelColor: Theme.of(context).colorScheme.primary,
+              unselectedLabelColor: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+              tabs: const [
+                Tab(icon: Icon(Icons.history), text: "Tarix"),
+                Tab(icon: Icon(Icons.favorite), text: "Sevimlilar"),
+                Tab(icon: Icon(Icons.bookmark), text: "Saqlanganlar"),
+              ],
+            ),
+          ),
+          Expanded(
+            child: TabBarView(
+              children: [
+                // Tarix
+                Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8.0, right: 16),
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton.icon(
+                          icon: const Icon(Icons.delete_outline),
+                          label: const Text("Tozalash"),
+                          onPressed: () {
+                            PreferencesManager.clearHistory().then((_) {
+                              setState(() {
+                                _historyResult = [];
+                              });
+                            });
+                          },
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: _historyResult.isEmpty
+                          ? Center(child: Text("Hozircha tarix bo'sh.", style: textTheme.bodyMedium))
+                          : _buildWordList(_historyResult, textTheme, isHistoryPage: true),
+                    ),
+                  ],
+                ),
+                // Sevimlilar
+                _favorites.isEmpty
+                    ? Center(child: Text("Sevimlilar bo'sh.", style: textTheme.bodyMedium))
+                    : _buildWordList(_favorites, textTheme),
+                // Saqlanganlar
+                _saved.isEmpty
+                    ? Center(child: Text("Saqlanganlar bo'sh.", style: textTheme.bodyMedium))
+                    : _buildWordList(_saved, textTheme),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   /// Qidiruv logikasi: Kirish matniga ko'ra so'zlarni filtrlaydi.
@@ -55,7 +136,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final lowerCaseQuery = query.toLowerCase();
 
     // Barcha so'zlar ro'yxati bo'ylab qidiramiz
-    for (var word in WordsRepository.allWords) {
+    for (var word in _allWords) {
       bool isMatch = false;
 
       // 1. Aniq moslik rejimi (Exact Match)
@@ -131,35 +212,70 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ],
         ),
-        body: IndexedStack(
-          index: _currentNavIndex, // BottomNavigationBar orqali boshqariladi
-          children: [
-            // 0. Qidiruv Sahifasi
-            _buildSearchPage(textTheme),
-            
-            // 1. Guruhlar Sahifasi ( image_0.png dagi "To'plamlar" kabi)
-            _buildGroupsPage(textTheme),
-            
-            // 2. Saqlanganlar/Tarix Sahifasi (image_1.png kabi)
-            _buildHistoryPage(textTheme),
-            
-            // 3. Ilova haqida Ma'lumot Sahifasi (Siz yozasiz)
-            _buildAboutPage(textTheme),
-          ],
-        ),
-        bottomNavigationBar: BottomNavigationBar(
-          currentIndex: _currentNavIndex,
-          onTap: (index) {
-            setState(() {
-              _currentNavIndex = index;
-            });
-          },
-          items: const [
-            BottomNavigationBarItem(icon: Icon(Icons.search), label: "Qidiruv"),
-            BottomNavigationBarItem(icon: Icon(Icons.category_outlined), label: "Guruhlar"),
-            BottomNavigationBarItem(icon: Icon(Icons.bookmark_border), label: "Tarix"),
-            BottomNavigationBarItem(icon: Icon(Icons.info_outline), label: "Ma'lumot"),
-          ],
+        body: _isLoading 
+          ? const Center(child: CircularProgressIndicator()) // Yuklanish jarayoni
+          : IndexedStack(
+            index: _currentNavIndex,
+            children: [
+              _buildSearchPage(textTheme),
+              _buildGroupsPage(textTheme),
+              _buildHistoryPage(textTheme),
+              _buildAboutPage(textTheme),
+            ],
+          ),
+        bottomNavigationBar: Padding(
+          padding: const EdgeInsets.only(left: 12, right: 12, bottom: 10),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(28),
+            child: Container(
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surface.withOpacity(0.95),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.08),
+                    blurRadius: 16,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: BottomNavigationBar(
+                type: BottomNavigationBarType.fixed,
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                selectedItemColor: theme.colorScheme.primary,
+                unselectedItemColor: theme.colorScheme.onSurface.withOpacity(0.6),
+                showUnselectedLabels: true,
+                currentIndex: _currentNavIndex,
+                onTap: (index) {
+                  setState(() {
+                    _currentNavIndex = index;
+                  });
+                },
+                items: const [
+                  BottomNavigationBarItem(
+                    icon: Icon(Icons.search),
+                    label: "Qidiruv",
+                  ),
+                  BottomNavigationBarItem(
+                    icon: Icon(Icons.category_outlined),
+                    label: "Guruhlar",
+                  ),
+                  BottomNavigationBarItem(
+                    icon: Icon(Icons.bookmark_border),
+                    label: "Tarix",
+                  ),
+                  BottomNavigationBarItem(
+                    icon: Icon(Icons.info_outline),
+                    label: "Ma'lumot",
+                  ),
+                ],
+                selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 12),
+                enableFeedback: true,
+                landscapeLayout: BottomNavigationBarLandscapeLayout.spread,
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -208,7 +324,7 @@ class _HomeScreenState extends State<HomeScreen> {
             title: Text("Aniq moslik", style: textTheme.bodyLarge),
             subtitle: Text("So'z aynan qidirilgan matnga teng bo'lsin", style: textTheme.bodyMedium),
             value: _isExactSearch,
-            activeColor: const Color(0xFF00BFA5),
+            activeThumbColor: const Color(0xFF00BFA5),
             onChanged: (v) {
               PreferencesManager.saveExactSearch(v); // Saqlash
               setState(() => _isExactSearch = v);
@@ -220,7 +336,7 @@ class _HomeScreenState extends State<HomeScreen> {
             title: Text("O'xshashlik rejimi", style: textTheme.bodyLarge),
             subtitle: Text("So'z tarkibida bo'lsa ham topadi", style: textTheme.bodyMedium),
             value: _isFuzzySearch,
-            activeColor: const Color(0xFF00BFA5),
+            activeThumbColor: const Color(0xFF00BFA5),
             onChanged: (v) {
               PreferencesManager.saveFuzzySearch(v); // Saqlash
               setState(() => _isFuzzySearch = v);
@@ -244,9 +360,9 @@ class _HomeScreenState extends State<HomeScreen> {
         Expanded(
           child: ListView(
             children: [
-              _buildGroupCard("Fellar", Icons.book_outlined, WordsRepository.verbs, textTheme),
-              _buildGroupCard("Ismlar", Icons.library_books_outlined, WordsRepository.nouns, textTheme),
-              _buildGroupCard("Harflar", Icons.local_offer_outlined, WordsRepository.particles, textTheme),
+              _buildGroupCard("Fellar", Icons.book_outlined, _allWords.where((w) => w.type == WordType.fel).toList(), textTheme),
+              _buildGroupCard("Ismlar", Icons.library_books_outlined, _allWords.where((w) => w.type == WordType.ism).toList(), textTheme),
+              _buildGroupCard("Harflar", Icons.local_offer_outlined, _allWords.where((w) => w.type == WordType.harf).toList(), textTheme),
             ],
           ),
         ),
@@ -268,56 +384,14 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Text("${wordList.length} ta", style: const TextStyle(color: Color(0xFF00BFA5), fontWeight: FontWeight.bold)),
         ),
         onTap: () {
-          // Guruhdagi barcha so'zlarni ko'rsatadigan sahifaga o'tish
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) => Theme(
-                data: PreferencesManager.loadThemeMode() == 0 ? AppTheme.lightTheme : AppTheme.softCreamTheme,
-                child: Scaffold(
-                  appBar: AppBar(title: Text(title)),
-                  body: _buildWordList(wordList, textTheme),
-                ),
-              ),
+              builder: (context) => GroupWordsScreen(groupTitle: title, words: wordList),
             ),
           );
         },
       ),
-    );
-  }
-
-  /// Tarix ro'yxati ko'rsatilgan sahifa
-  Widget _buildHistoryPage(TextTheme textTheme) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(15.0),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text("Oxirgi qidiruvlar", style: textTheme.headlineMedium),
-              if (_historyResult.isNotEmpty)
-                TextButton(
-                  onPressed: () {
-                    // Tarixni tozalash funksiyasi
-                    PreferencesManager.clearHistory().then((_) {
-                      setState(() {
-                        _historyResult = [];
-                      });
-                    });
-                  },
-                  child: const Text("Tozalash"),
-                ),
-            ],
-          ),
-        ),
-        Expanded(
-          child: _historyResult.isEmpty
-              ? Center(child: Text("Hozircha tarix bo'sh.", style: textTheme.bodyMedium))
-              : _buildWordList(_historyResult, textTheme, isHistoryPage: true),
-        ),
-      ],
     );
   }
 
@@ -351,23 +425,60 @@ class _HomeScreenState extends State<HomeScreen> {
     return ListView.separated(
       itemCount: items.length,
       padding: const EdgeInsets.all(10.0),
-      separatorBuilder: (context, index) => const SizedBox(height: 8), // Kartochkalar orasidagi masofa
+      separatorBuilder: (context, index) => const SizedBox(height: 10),
       itemBuilder: (context, index) {
         final word = items[index];
-        return Card(
-          child: ListTile(
-            contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 5),
-            title: Text(
-              word.word, // Arabcha so'z
-              textAlign: TextAlign.right, // O'ngdan chapga yozish
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 350),
+          curve: Curves.easeInOut,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(20),
+            onTap: () => _onWordTapped(word),
+            splashColor: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+            highlightColor: Colors.transparent,
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(20),
+                gradient: LinearGradient(
+                  colors: [
+                    Theme.of(context).cardColor,
+                    Theme.of(context).colorScheme.surface.withOpacity(0.95),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.07),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                leading: CircleAvatar(
+                  backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.12),
+                  child: Text(
+                    word.word.isNotEmpty ? word.word[0] : '',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.primary,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                title: Text(
+                  word.word, // Arabcha so'z
+                  textAlign: TextAlign.right,
+                  style: textTheme.bodyLarge?.copyWith(fontSize: 22, fontWeight: FontWeight.bold),
+                ),
+                subtitle: Text(
+                  word.translation,
+                  style: textTheme.bodyMedium?.copyWith(fontSize: 16),
+                ),
+                trailing: Icon(Icons.navigate_next_rounded, color: Theme.of(context).colorScheme.primary.withOpacity(0.5)),
+              ),
             ),
-            subtitle: Text(
-              word.translation, // O'zbekcha tarjima
-              style: textTheme.bodyMedium,
-            ),
-            trailing: Icon(Icons.navigate_next_outlined, color: Colors.grey.shade400),
-            onTap: () => _onWordTapped(word), // Tafsilotga o'tish
           ),
         );
       },

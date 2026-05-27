@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../models/word_model.dart';
 import '../managers/preferences_manager.dart';
 import '../app_theme.dart';
-
 /// Bitta so'z haqida to'liq tafsilotlarni ko'rsatadigan sahifa.
 class WordDetailsScreen extends StatelessWidget {
   final DictionaryWord word;
@@ -29,7 +28,7 @@ class WordDetailsScreen extends StatelessWidget {
                 child: Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF00BFA5).withOpacity(0.1),
+                    color: const Color(0xFF00BFA5).withValues(alpha: 1.0),
                     shape: BoxShape.circle,
                   ),
                   child: Text(
