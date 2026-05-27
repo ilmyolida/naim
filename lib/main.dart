@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'screens/home_screen.dart';
 import 'managers/preferences_manager.dart';
 import 'app_theme.dart';
-import 'package:share_plus/share_plus.dart'; // Agar siz share_plus kutubxonasini ishlatsangiz, uni import qilishingiz kerak
 
 void main() async {
   // Flutter interfeysini bog'lash (async ishlar uchun kerak)

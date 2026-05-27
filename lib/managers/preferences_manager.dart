@@ -5,6 +5,56 @@ import '../models/word_model.dart';
 /// Ilovaning holatini (Settings, History) xotirada saqlash va yuklash klassi.
 /// Bu klass orqali ilova yopilib ochilganda ma'lumotlar yo'qolmaydi.
 class PreferencesManager {
+    static const String _keyFavorites = 'favorites';
+    static const String _keySaved = 'saved_words';
+
+    // --- Sevimlilar boshqaruvi ---
+    static List<DictionaryWord> loadFavorites() {
+      final jsonStrList = _prefs.getStringList(_keyFavorites) ?? [];
+      return jsonStrList
+          .map((jsonStr) => DictionaryWord.fromJson(jsonDecode(jsonStr)))
+          .toList();
+    }
+
+    static Future<void> addToFavorites(DictionaryWord word) async {
+      List<DictionaryWord> current = loadFavorites();
+      if (!current.contains(word)) {
+        current.insert(0, word);
+        final jsonStrList = current.map((w) => jsonEncode(w.toJson())).toList();
+        await _prefs.setStringList(_keyFavorites, jsonStrList);
+      }
+    }
+
+    static Future<void> removeFromFavorites(DictionaryWord word) async {
+      List<DictionaryWord> current = loadFavorites();
+      current.remove(word);
+      final jsonStrList = current.map((w) => jsonEncode(w.toJson())).toList();
+      await _prefs.setStringList(_keyFavorites, jsonStrList);
+    }
+
+    // --- Saqlanganlar boshqaruvi ---
+    static List<DictionaryWord> loadSaved() {
+      final jsonStrList = _prefs.getStringList(_keySaved) ?? [];
+      return jsonStrList
+          .map((jsonStr) => DictionaryWord.fromJson(jsonDecode(jsonStr)))
+          .toList();
+    }
+
+    static Future<void> addToSaved(DictionaryWord word) async {
+      List<DictionaryWord> current = loadSaved();
+      if (!current.contains(word)) {
+        current.insert(0, word);
+        final jsonStrList = current.map((w) => jsonEncode(w.toJson())).toList();
+        await _prefs.setStringList(_keySaved, jsonStrList);
+      }
+    }
+
+    static Future<void> removeFromSaved(DictionaryWord word) async {
+      List<DictionaryWord> current = loadSaved();
+      current.remove(word);
+      final jsonStrList = current.map((w) => jsonEncode(w.toJson())).toList();
+      await _prefs.setStringList(_keySaved, jsonStrList);
+    }
   static const String _keyHistory = 'search_history';
   static const String _keyThemeMode = 'theme_mode'; // 0: Light, 1: Soft Cream
   static const String _keyExactSearch = 'exact_search';

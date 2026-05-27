@@ -45,15 +45,15 @@ void initState() {
 
 void _loadAllData() async {
   final data = await DataService.loadAllData(); // TXT fayllardan o'qiydi
-  setState(() {
-    _allWords = data;
-    _historyResult = PreferencesManager.loadHistory();
-      _favorites = PreferencesManager.loadFavorites?.call() ?? [];
-      _saved = PreferencesManager.loadSaved?.call() ?? [];
-    _isExactSearch = PreferencesManager.loadExactSearch();
-    _isFuzzySearch = PreferencesManager.loadFuzzySearch();
-    _isLoading = false; // Yuklab bo'lingach, ekranni ochamiz
-  });
+    setState(() {
+      _allWords = data;
+      _historyResult = PreferencesManager.loadHistory();
+      _favorites = PreferencesManager.loadFavorites();
+      _saved = PreferencesManager.loadSaved();
+      _isExactSearch = PreferencesManager.loadExactSearch();
+      _isFuzzySearch = PreferencesManager.loadFuzzySearch();
+      _isLoading = false; // Yuklab bo'lingach, ekranni ochamiz
+    });
 }
 
   /// Tarix, Sevimlilar, Saqlanganlar uchun universal sahifa
@@ -202,37 +202,36 @@ void _loadAllData() async {
             IconButton(
               icon: Icon(PreferencesManager.loadThemeMode() == 0 ? Icons.light_mode : Icons.wb_sunny_outlined),
               onPressed: () {
-                // Hozirgi rejimni teskarisiga almashtirish va saqlash
                 int currentMode = PreferencesManager.loadThemeMode();
                 int nextMode = currentMode == 0 ? 1 : 0; // Light (0) -> Cream (1)
                 PreferencesManager.saveThemeMode(nextMode).then((_) {
-                  setState(() {}); // Ekranni qayta chizish (rejim o'zgarishi uchun)
+                  setState(() {});
                 });
               },
             ),
           ],
         ),
         body: _isLoading 
-          ? const Center(child: CircularProgressIndicator()) // Yuklanish jarayoni
+          ? const Center(child: CircularProgressIndicator())
           : IndexedStack(
-            index: _currentNavIndex,
-            children: [
-              _buildSearchPage(textTheme),
-              _buildGroupsPage(textTheme),
-              _buildHistoryPage(textTheme),
-              _buildAboutPage(textTheme),
-            ],
-          ),
+              index: _currentNavIndex,
+              children: [
+                _buildSearchPage(textTheme),
+                _buildGroupsPage(textTheme),
+                _buildHistoryPage(textTheme),
+                _buildAboutPage(textTheme),
+              ],
+            ),
         bottomNavigationBar: Padding(
           padding: const EdgeInsets.only(left: 12, right: 12, bottom: 10),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(28),
             child: Container(
               decoration: BoxDecoration(
-                color: theme.colorScheme.surface.withOpacity(0.95),
+                color: theme.colorScheme.surface.withAlpha(242),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.08),
+                    color: Colors.black.withAlpha(20),
                     blurRadius: 16,
                     offset: const Offset(0, 4),
                   ),
@@ -243,7 +242,7 @@ void _loadAllData() async {
                 backgroundColor: Colors.transparent,
                 elevation: 0,
                 selectedItemColor: theme.colorScheme.primary,
-                unselectedItemColor: theme.colorScheme.onSurface.withOpacity(0.6),
+                unselectedItemColor: theme.colorScheme.onSurface.withAlpha(153),
                 showUnselectedLabels: true,
                 currentIndex: _currentNavIndex,
                 onTap: (index) {
