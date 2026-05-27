@@ -1,5 +1,5 @@
-import '../models/word_model.dart';
-
+//import '../models/word_model.dart';
+//import '../services/data_service.dart';
 /// "An-Na’im al-Kubro" lug'atidagi barcha fellar ro'yxati.
 /// Bu yerda ID larni ketma-ket, noyob qilib belgilang.
 List<DictionaryWord> verbsData = [
