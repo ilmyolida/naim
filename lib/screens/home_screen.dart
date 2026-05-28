@@ -36,6 +36,7 @@ class _HomeScreenState extends State<HomeScreen> {
   // Tanlangan qidiruv rejimlari (Xotiradan yuklanadi)
   bool _isExactSearch = false; // Aniq moslik
   bool _isFuzzySearch = true; // O'xshashlik
+  int _themeMode = 0; // 0: Light, 1: Cream, 2: Dark
 
   // BottomNavigationBar'ning hozirgi index'i
   int _currentNavIndex = 0;
@@ -48,6 +49,9 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _loadAllData(); // Ma'lumotlarni yuklashni chaqiramiz
     _checkAgreement();
+    _themeMode = PreferencesManager.loadThemeMode();
+    _isExactSearch = PreferencesManager.loadExactSearch();
+    _isFuzzySearch = PreferencesManager.loadFuzzySearch();
   }
 
   Future<void> _checkAgreement() async {
@@ -75,7 +79,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     const SizedBox(height: 12),
                     TextButton.icon(
                       icon: const Icon(Icons.open_in_browser),
-                      label: const Text('Shartnoma va siyosatni ochish'),
+                      label: const Text('Foydalanish shartlari'),
                       onPressed: () async {
                         final url = Uri.parse(
                           'https://ilmyolida.github.io/Naim-deployment-/Naim.html',
@@ -124,6 +128,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _saved = PreferencesManager.loadSaved();
       _isExactSearch = PreferencesManager.loadExactSearch();
       _isFuzzySearch = PreferencesManager.loadFuzzySearch();
+      _themeMode = PreferencesManager.loadThemeMode();
       _isLoading = false; // Yuklab bo'lingach, ekranni ochamiz
     });
   }
@@ -137,57 +142,29 @@ class _HomeScreenState extends State<HomeScreen> {
           Container(
             color: Theme.of(context).scaffoldBackgroundColor,
             child: TabBar(
-              indicatorColor: Theme.of(context).colorScheme.primary,
-              labelColor: Theme.of(context).colorScheme.primary,
-              unselectedLabelColor: Theme.of(
-                context,
-              ).colorScheme.onSurface.withValues(alpha: 0.6),
-              tabs: const [
-                Tab(icon: Icon(Icons.history), text: "Tarix"),
-                Tab(icon: Icon(Icons.favorite), text: "Sevimlilar"),
-                Tab(icon: Icon(Icons.bookmark), text: "Saqlanganlar"),
+              tabs: [
+                Tab(text: "Tarix"),
+                Tab(text: "Sevimlilar"),
+                Tab(text: "Saqlanganlar"),
               ],
+              labelColor: Theme.of(context).colorScheme.primary,
+              unselectedLabelColor: Theme.of(context).hintColor,
+              indicatorColor: Theme.of(context).colorScheme.primary,
             ),
           ),
+          // Tarix
           Expanded(
             child: TabBarView(
               children: [
                 // Tarix
-                Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8.0, right: 16),
-                      child: Align(
-                        alignment: Alignment.centerRight,
-                        child: TextButton.icon(
-                          icon: const Icon(Icons.delete_outline),
-                          label: const Text("Tozalash"),
-                          onPressed: () {
-                            PreferencesManager.clearHistory().then((_) {
-                              setState(() {
-                                _historyResult = [];
-                              });
-                            });
-                          },
+                _historyResult.isEmpty
+                    ? Center(
+                        child: Text(
+                          "Tarix bo'sh.",
+                          style: textTheme.bodyMedium,
                         ),
-                      ),
-                    ),
-                    Expanded(
-                      child: _historyResult.isEmpty
-                          ? Center(
-                              child: Text(
-                                "Hozircha tarix bo'sh.",
-                                style: textTheme.bodyMedium,
-                              ),
-                            )
-                          : _buildWordList(
-                              _historyResult,
-                              textTheme,
-                              isHistoryPage: true,
-                            ),
-                    ),
-                  ],
-                ),
+                      )
+                    : _buildWordList(_historyResult, textTheme, _onWordTapped),
                 // Sevimlilar
                 _favorites.isEmpty
                     ? Center(
@@ -196,7 +173,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           style: textTheme.bodyMedium,
                         ),
                       )
-                    : _buildWordList(_favorites, textTheme, isHistoryPage: false),
+                    : _buildWordList(_favorites, textTheme, _onWordTapped),
                 // Saqlanganlar
                 _saved.isEmpty
                     ? Center(
@@ -205,7 +182,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           style: textTheme.bodyMedium,
                         ),
                       )
-                    : _buildWordList(_saved, textTheme, isHistoryPage: false),
+                    : _buildWordList(_saved, textTheme, _onWordTapped),
               ],
             ),
           ),
@@ -217,41 +194,45 @@ class _HomeScreenState extends State<HomeScreen> {
   /// Qidiruv logikasi: Kirish matniga ko'ra so'zlarni filtrlaydi.
   /// Matn o'zgargan har gal chaqiriladi.
   void _performSearch(String query) {
-    if (query.isEmpty) {
-      // Matn bo'sh bo'lsa, qidiruv natijasini bo'shatamiz
+    if (query.trim().isEmpty) {
       setState(() {
         _searchResult = [];
       });
       return;
     }
 
+    final normalizedQuery = query.trim().toLowerCase();
     List<DictionaryWord> filteredWords = [];
-    final lowerCaseQuery = query.toLowerCase();
 
-    // Barcha so'zlar ro'yxati bo'ylab qidiramiz
     for (var word in _allWords) {
       bool isMatch = false;
+      // Normalize both word and translation for robust matching
+      final wordText = (word.word ?? '').toLowerCase();
+      final translationText = (word.translation ?? '').toLowerCase();
 
-      // 1. Aniq moslik rejimi (Exact Match)
+      // 1. Exact match (handles all scripts)
       if (_isExactSearch) {
-        if (word.word == query ||
-            word.translation.toLowerCase() == lowerCaseQuery) {
+        if (wordText == normalizedQuery || translationText == normalizedQuery) {
           isMatch = true;
         }
       }
 
-      // 2. O'xshashlik rejimi (Fuzzy Match)
-      // Bu standart rejim bo'lishi kerak.
+      // 2. Fuzzy match (contains, Unicode-aware)
       if (!isMatch && _isFuzzySearch) {
-        // So'z tarkibida bo'lsa (Contains)
-        if (word.word.contains(query) ||
-            word.translation.toLowerCase().contains(lowerCaseQuery)) {
+        if (wordText.contains(normalizedQuery) ||
+            translationText.contains(normalizedQuery)) {
           isMatch = true;
         }
-        // Kelajakda bu yerga murakkab fuzzy search algoritmlarini (masalan, distance) qo'shish mumkin.
+        // Also match if query is a number and appears anywhere
+        if (!isMatch &&
+            normalizedQuery.runes.every((r) => r >= 0x30 && r <= 0x39)) {
+          if (wordText.contains(normalizedQuery) ||
+              translationText.contains(normalizedQuery)) {
+            isMatch = true;
+          }
+        }
       }
 
-      // Agar mos kelsa, natijaga qo'shamiz
       if (isMatch) {
         filteredWords.add(word);
       }
@@ -282,9 +263,11 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     // Light mode yoki Cream mode rejimini Preference'ga qarab tanlaymiz
-    final theme = PreferencesManager.loadThemeMode() == 0
+    final theme = _themeMode == 0
         ? AppTheme.lightTheme
-        : AppTheme.softCreamTheme;
+        : _themeMode == 1
+        ? AppTheme.softCreamTheme
+        : ThemeData.dark();
     final textTheme = theme.textTheme;
 
     return Theme(
@@ -320,7 +303,12 @@ class _HomeScreenState extends State<HomeScreen> {
                   _buildSearchPage(textTheme),
                   _buildGroupsPage(textTheme, context, _allWords),
                   _buildHistoryPage(textTheme),
-                  _buildAboutPage(textTheme, context, _isExactSearch, _isFuzzySearch),
+                  _buildAboutPage(
+                    textTheme,
+                    context,
+                    _isExactSearch,
+                    _isFuzzySearch,
+                  ),
                 ],
               ),
         bottomNavigationBar: Padding(
@@ -424,411 +412,401 @@ class _HomeScreenState extends State<HomeScreen> {
                     style: textTheme.bodyMedium,
                   ),
                 )
-              : _buildWordList(_searchResult, textTheme, isHistoryPage: false),
+              : _buildWordList(_searchResult, textTheme, _onWordTapped),
         ),
       ],
     );
   }
-  
-  // ...existing code...
-}
 
-/// Qidiruv rejimlari ko'rsatilgan chiroyli Card
-// _buildSearchModesCard legacy widget and all references removed
+  // ignore: strict_top_level_inference
+  _buildWordList(
+    List<DictionaryWord> historyResult,
+    TextTheme textTheme,
+    void Function(DictionaryWord word) onWordTapped,
+  ) {}
 
-// Legacy/broken class and function stubs removed
-
-/// Guruhlar ro'yxati ko'rsatilgan sahifa (image_0.png kabi)
-Widget _buildGroupsPage(TextTheme textTheme, BuildContext context, dynamic allWords) {
-  return Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Padding(
-        padding: const EdgeInsets.all(15.0),
-        child: Text("To'plamlar", style: textTheme.headlineMedium),
-      ),
-      Expanded(
-        child: ListView(
-          children: [
-            _buildGroupCard(
-              "Fellar",
-              Icons.book_outlined,
-              allWords.where((w) => w.type == WordType.fel).toList(),
-              textTheme,
-              context,
-            ),
-            _buildGroupCard(
-              "Ismlar",
-              Icons.library_books_outlined,
-              allWords.where((w) => w.type == WordType.ism).toList(),
-              textTheme,
-              context,
-            ),
-            _buildGroupCard(
-              "Harflar",
-              Icons.local_offer_outlined,
-              allWords.where((w) => w.type == WordType.harf).toList(),
-              textTheme,
-              context,
-            ),
-          ],
-        ),
-      ),
-    ],
-  );
-}
-
-Widget _buildGroupCard(
-  String title,
-  IconData icon,
-  List<DictionaryWord> wordList,
-  TextTheme textTheme,
-  BuildContext context,
-) {
-  return Card(
-    margin: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
-    child: ListTile(
-      leading: Icon(icon, color: const Color(0xFF00BFA5), size: 30),
-      title: Text(
-        title,
-        style: textTheme.bodyLarge!.copyWith(fontWeight: FontWeight.bold),
-      ),
-      subtitle: Text(
-        "An-Na'im al-Kubro ${title.toLowerCase()} to'plami",
-        style: textTheme.bodyMedium,
-      ),
-      trailing: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          color: const Color(0xFFE0F2F1),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Text(
-          "${wordList.length} ta",
-          style: const TextStyle(
-            color: Color(0xFF00BFA5),
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ),
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) =>
-                GroupWordsScreen(groupTitle: title, words: wordList),
-          ),
-        );
-      },
-    ),
-  );
-}
-
-/// Barcha matnli ma'lumotlarni siz yozadigan sahifa
-Widget _buildAboutPage(TextTheme textTheme, BuildContext context, bool isExactSearch, bool isFuzzySearch) {
-  return SingleChildScrollView(
-    padding: const EdgeInsets.all(20.0),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.center,
+  /// Guruhlar ro'yxati ko'rsatilgan sahifa (image_0.png kabi)
+  Widget _buildGroupsPage(
+    TextTheme textTheme,
+    BuildContext context,
+    dynamic allWords,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Qidiruv rejimlari va theme haqida card
-        Card(
-          margin: const EdgeInsets.only(bottom: 18),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
+        Padding(
+          padding: const EdgeInsets.all(15.0),
+          child: Text("To'plamlar", style: textTheme.headlineMedium),
+        ),
+        Expanded(
+          child: ListView(
+            children: [
+              _buildGroupCard(
+                "Fellar",
+                Icons.book_outlined,
+                allWords.where((w) => w.type == WordType.fel).toList(),
+                textTheme,
+                context,
+              ),
+              _buildGroupCard(
+                "Ismlar",
+                Icons.library_books_outlined,
+                allWords.where((w) => w.type == WordType.ism).toList(),
+                textTheme,
+                context,
+              ),
+              _buildGroupCard(
+                "Harflar",
+                Icons.local_offer_outlined,
+                allWords.where((w) => w.type == WordType.harf).toList(),
+                textTheme,
+                context,
+              ),
+            ],
           ),
-          elevation: 2,
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(
-                      Icons.tune,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      "Qidiruv sozlamalari",
-                      style: textTheme.bodyLarge!.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Icon(
-                      isExactSearch
-                          ? Icons.check_circle
-                          : Icons.radio_button_unchecked,
-                      color: isExactSearch ? Colors.green : Colors.grey,
-                    ),
-                    const SizedBox(width: 6),
-                    Text("Aniq moslik: ", style: textTheme.bodyMedium),
-                    Text(
-                      isExactSearch ? "yoqilgan" : "o'chirilgan",
-                      style: textTheme.bodyMedium!.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Icon(
-                      isFuzzySearch
-                          ? Icons.check_circle
-                          : Icons.radio_button_unchecked,
-                      color: isFuzzySearch ? Colors.green : Colors.grey,
-                    ),
-                    const SizedBox(width: 6),
-                    Text("O'xshashlik rejimi: ", style: textTheme.bodyMedium),
-                    Text(
-                      isFuzzySearch ? "yoqilgan" : "o'chirilgan",
-                      style: textTheme.bodyMedium!.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Icon(
-                      Icons.color_lens,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                    const SizedBox(width: 6),
-                    Text("Mavzu: ", style: textTheme.bodyMedium),
-                    Text(
-                      PreferencesManager.loadThemeMode() == 0
-                          ? "Oq (Light)"
-                          : PreferencesManager.loadThemeMode() == 1
-                          ? "Sariq (Cream)"
-                          : "Qora (Dark)",
-                      style: textTheme.bodyMedium!.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildGroupCard(
+    String title,
+    IconData icon,
+    List<DictionaryWord> wordList,
+    TextTheme textTheme,
+    BuildContext context,
+  ) {
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
+      child: ListTile(
+        leading: Icon(icon, color: const Color(0xFF00BFA5), size: 30),
+        title: Text(
+          title,
+          style: textTheme.bodyLarge!.copyWith(fontWeight: FontWeight.bold),
+        ),
+        subtitle: Text(
+          "An-Na'im al-Kubro ${title.toLowerCase()} to'plami",
+          style: textTheme.bodyMedium,
+        ),
+        trailing: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: const Color(0xFFE0F2F1),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Text(
+            "${wordList.length} ta",
+            style: const TextStyle(
+              color: Color(0xFF00BFA5),
+              fontWeight: FontWeight.bold,
             ),
           ),
         ),
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) =>
+                  GroupWordsScreen(groupTitle: title, words: wordList),
+            ),
+          );
+        },
+      ),
+    );
+  }
 
-        // Maxfiylik siyosati va shartlar card
-        Card(
-          margin: const EdgeInsets.only(bottom: 18),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
-          ),
-          elevation: 2,
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(
-                      Icons.privacy_tip,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      "Mahfiylik siyosati va shartlar",
-                      style: textTheme.bodyLarge!.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  "Ilovadan foydalanish uchun quyidagi siyosat va shartlar bilan tanishib chiqing:",
+  Widget _buildAboutPage(
+    TextTheme textTheme,
+    BuildContext context,
+    bool isExactSearch,
+    bool isFuzzySearch,
+  ) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Removed unused variable isSmall
+        return ListView(
+          padding: const EdgeInsets.all(16.0),
+          children: [
+            // Safe Media company/news card
+            Card(
+              margin: const EdgeInsets.only(bottom: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+              ),
+              elevation: 2,
+              child: ListTile(
+                leading: const Icon(Icons.public, color: Colors.green),
+                title: const Text('Safe Media'),
+                subtitle: Text(
+                  "Yangiliklar, kompaniya haqida ma'lumot va rasmiy e'lonlar bilan tanishing.",
                   style: textTheme.bodyMedium,
                 ),
-                const SizedBox(height: 10),
-                Row(
+                trailing: const Icon(Icons.open_in_new, color: Colors.green),
+                onTap: () async {
+                  final url = Uri.parse("https://safemediaofficial-d25fa.web.app");
+                  await launchUrl(url, mode: LaunchMode.externalApplication);
+                },
+              ),
+            ),
+            // Theme and search settings
+            Card(
+              margin: const EdgeInsets.only(bottom: 18),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+              ),
+              elevation: 2,
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.link, color: Colors.blue),
-                    const SizedBox(width: 6),
-                    Flexible(
-                      child: GestureDetector(
-                        onTap: () async {
-                          // ignore: deprecated_member_use
-                          await showDialog(
-                            context: context,
-                            builder: (ctx) => AlertDialog(
-                              title: const Text(
-                                "Mahfiylik siyosati va shartlar",
-                              ),
-                              content: SizedBox(
-                                width: 400,
-                                height: 400,
-                                child: Center(
-                                  child: SingleChildScrollView(
-                                    child: Column(
-                                      children: [
-                                        Text(
-                                          "To'liq siyosat va shartlar quyidagi havolada:",
-                                          style: textTheme.bodyMedium,
-                                        ),
-                                        const SizedBox(height: 10),
-                                        TextButton.icon(
-                                          icon: const Icon(
-                                            Icons.open_in_browser,
-                                          ),
-                                          label: const Text("Brauzerda ochish"),
-                                          onPressed: () async {
-                                            final url = Uri.parse(
-                                              "https://ilmyolida.github.io/Naim-deployment-/Naim.html",
-                                            );
-                                            if (await canLaunchUrl(url)) {
-                                              await launchUrl(
-                                                url,
-                                                mode: LaunchMode
-                                                    .externalApplication,
-                                              );
-                                            }
-                                          },
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.pop(ctx),
-                                  child: const Text("Yopish"),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                        child: Text(
-                          "https://ilmyolida.github.io/Naim-deployment-/Naim.html",
-                          style: const TextStyle(
-                            color: Colors.blue,
-                            decoration: TextDecoration.underline,
+                    Row(
+                      children: [
+                        const Text('⚙️', style: TextStyle(fontSize: 22)),
+                        const SizedBox(width: 8),
+                        Text(
+                          "Qidiruv va Tema",
+                          style: textTheme.bodyLarge!.copyWith(
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
-                      ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    // Search mode toggles
+                    Row(
+                      children: [
+                        const Icon(Icons.search, color: Colors.blue),
+                        const SizedBox(width: 8),
+                        Text("Aniq moslik:", style: textTheme.bodyMedium),
+                        const SizedBox(width: 8),
+                        Switch(
+                          value: _isExactSearch,
+                          activeThumbColor: Colors.green,
+                          onChanged: (val) async {
+                            await PreferencesManager.saveExactSearch(val);
+                            setState(() {
+                              _isExactSearch = val;
+                            });
+                          },
+                        ),
+                        const SizedBox(width: 18),
+                        const Icon(Icons.blur_on, color: Colors.deepPurple),
+                        const SizedBox(width: 8),
+                        Text("O'xshashlik:", style: textTheme.bodyMedium),
+                        const SizedBox(width: 8),
+                        Switch(
+                          value: _isFuzzySearch,
+                          activeThumbColor: Colors.deepPurple,
+                          onChanged: (val) async {
+                            await PreferencesManager.saveFuzzySearch(val);
+                            setState(() {
+                              _isFuzzySearch = val;
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 18),
+                    // Theme toggle
+                    Row(
+                      children: [
+                        const Text('📖', style: TextStyle(fontSize: 22)),
+                        const SizedBox(width: 8),
+                        Text("Mavzu:", style: textTheme.bodyMedium),
+                        const SizedBox(width: 10),
+                        ChoiceChip(
+                          label: const Text("Light"),
+                          selected: _themeMode == 0,
+                          onSelected: (selected) async {
+                            if (selected) {
+                              await PreferencesManager.saveThemeMode(0);
+                              setState(() {
+                                _themeMode = 0;
+                              });
+                            }
+                          },
+                        ),
+                        const SizedBox(width: 6),
+                        ChoiceChip(
+                          label: const Text("Read"),
+                          selected: _themeMode == 1,
+                          onSelected: (selected) async {
+                            if (selected) {
+                              await PreferencesManager.saveThemeMode(1);
+                              setState(() {
+                                _themeMode = 1;
+                              });
+                            }
+                          },
+                        ),
+                        const SizedBox(width: 6),
+                        ChoiceChip(
+                          label: const Text("Dark"),
+                          selected: _themeMode == 2,
+                          onSelected: (selected) async {
+                            if (selected) {
+                              await PreferencesManager.saveThemeMode(2);
+                              setState(() {
+                                _themeMode = 2;
+                              });
+                            }
+                          },
+                        ),
+                      ],
                     ),
                   ],
                 ),
-              ],
-            ),
-          ),
-        ),
-
-        const Icon(Icons.info_outline, size: 80, color: Color(0xFF00BFA5)),
-        const SizedBox(height: 20),
-        Text("Ilova haqida ma'lumot", style: textTheme.headlineMedium),
-        const SizedBox(height: 15),
-        Text(
-          // --- MA'LUMOT MATNINI SHU YERGA YOZASIZ ---
-          "“An-Na’im al-Kubro” lug’ati arab tilini o'rganuvchilar va tadqiqotchilar uchun mo'ljallangan yirik hajmli manbadur.\n\nSiz bu ilova orqali lug'at tarkibidagi barcha so'zlarni 3ta asosiy guruhga ajratilgan holda ko'rishingiz mumkin: Fellar, Ismlar va Harflar. \n\nIlovadagi Qidiruv bo'limi sizga so'zni arabcha yoki o'zbekcha tarjimasiga ko'ra oson va tez topish imkonini beradi. Shuningdek, murakkab va fuzzy search (o'xshashlik) rejimlari ham mavjud.",
-          textAlign: TextAlign.justify,
-          style: textTheme.bodyLarge!.copyWith(height: 1.6),
-        ),
-        const SizedBox(height: 30),
-        // Versiya ma'lumotlari (image_2.png kabi)
-        Text("Versiya: 1.0.0", style: textTheme.bodyMedium),
-      ],
-    ),
-  );
-}
-
-/// So'zlar ro'yxatini Card'lar orqali chizadigan umumiy funksiya
-Widget _buildWordList(
-  List<DictionaryWord> items,
-  TextTheme textTheme, {
-  bool isHistoryPage = false,
-}) {
-  return ListView.separated(
-    itemCount: items.length,
-    padding: const EdgeInsets.all(10.0),
-    separatorBuilder: (context, index) => const SizedBox(height: 10),
-    itemBuilder: (context, index) {
-      final word = items[index];
-      return AnimatedContainer(
-        duration: const Duration(milliseconds: 350),
-        curve: Curves.easeInOut,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(20),
-          onTap: () => _onWordTapped(word),
-          splashColor: Theme.of(
-            context,
-          ).colorScheme.primary.withValues(alpha: 0.1),
-          highlightColor: Colors.transparent,
-          child: Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(20),
-              gradient: LinearGradient(
-                colors: [
-                  Theme.of(context).cardColor,
-                  Theme.of(context).colorScheme.surface.withValues(alpha: 0.95),
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
               ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.07),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
+            ),
+            // Foydalanish shartlari card
+            Card(
+              margin: const EdgeInsets.only(bottom: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+              ),
+              elevation: 2,
+              child: ListTile(
+                leading: const Icon(Icons.verified_user, color: Colors.blue),
+                title: const Text('Foydalanish shartlari'),
+                subtitle: Text(
+                  "Ilovadan foydalanish uchun shartlar bilan tanishing.",
+                  style: textTheme.bodyMedium,
                 ),
-              ],
-            ),
-            child: ListTile(
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 18,
-                vertical: 10,
+                trailing: const Icon(Icons.open_in_new, color: Colors.blue),
+                onTap: () async {
+                  final url = Uri.parse(
+                    "https://ilmyolida.github.io/Naim-deployment-/Naim.html",
+                  );
+                  await launchUrl(url, mode: LaunchMode.externalApplication);
+                },
               ),
-              leading: CircleAvatar(
-                backgroundColor: Theme.of(
-                  context,
-                ).colorScheme.primary.withValues(alpha: 0.12),
-                child: Text(
-                  word.word.isNotEmpty ? word.word[0] : '',
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.primary,
-                    fontWeight: FontWeight.bold,
+            ),
+            // Maxfiylik siyosati card
+            Card(
+              margin: const EdgeInsets.only(bottom: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+              ),
+              elevation: 2,
+              child: ListTile(
+                leading: const Icon(Icons.privacy_tip, color: Colors.teal),
+                title: const Text('Maxfiylik siyosati'),
+                subtitle: Text(
+                  "Ma'lumotlaringiz xavfsizligi haqida.",
+                  style: textTheme.bodyMedium,
+                ),
+                trailing: const Icon(Icons.open_in_new, color: Colors.teal),
+                onTap: () async {
+                  final url = Uri.parse(
+                    "https://ilmyolida.github.io/privaciyn/naimp.html",
+                  );
+                  await launchUrl(url, mode: LaunchMode.externalApplication);
+                },
+              ),
+            ),
+            // GitHub card
+            Card(
+              margin: const EdgeInsets.only(bottom: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+              ),
+              elevation: 2,
+              child: ListTile(
+                leading: const Icon(Icons.code, color: Colors.black),
+                title: const Text('GitHub manbasi'),
+                subtitle: Text(
+                  "Loyiha kodlari va yangiliklar.",
+                  style: textTheme.bodyMedium,
+                ),
+                trailing: const Icon(Icons.open_in_new, color: Colors.black),
+                onTap: () async {
+                  final url = Uri.parse("https://ilmyolida.github.io/");
+                  await launchUrl(url, mode: LaunchMode.externalApplication);
+                },
+              ),
+            ),
+            // Kirish card
+            Card(
+              margin: const EdgeInsets.only(bottom: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+              ),
+              elevation: 2,
+              child: ListTile(
+                leading: const Icon(Icons.login, color: Colors.deepPurple),
+                title: const Text('Kirish sahifasi'),
+                subtitle: Text(
+                  "Lug'atga kirish uchun sahifa.",
+                  style: textTheme.bodyMedium,
+                ),
+                trailing: const Icon(
+                  Icons.open_in_new,
+                  color: Colors.deepPurple,
+                ),
+                onTap: () async {
+                  final url = Uri.parse(
+                    "https://ilmyolida.github.io/Naim-deployment-/Naim.html",
+                  );
+                  await launchUrl(url, mode: LaunchMode.externalApplication);
+                },
+              ),
+            ),
+            // Support card
+            Card(
+              margin: const EdgeInsets.only(bottom: 18),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+              ),
+              elevation: 2,
+              child: ListTile(
+                leading: const Icon(Icons.support_agent, color: Colors.orange),
+                title: const Text('Fikr-mulohaza va yordam'),
+                subtitle: Text(
+                  "Taklif va muammolar uchun bog'laning.",
+                  style: textTheme.bodyMedium,
+                ),
+                trailing: const Icon(Icons.email, color: Colors.orange),
+                onTap: () async {
+                  final email = Uri(
+                    scheme: 'mailto',
+                    path: 'safemediaosupport@gmail.com',
+                    query:
+                        'subject=Naim%20Lugat%20Support%20%2F%20Fikr%20mulohaza',
+                  );
+                  await launchUrl(email, mode: LaunchMode.externalApplication);
+                },
+              ),
+            ),
+            // App info
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Column(
+                children: [
+                  const Icon(
+                    Icons.info_outline,
+                    size: 80,
+                    color: Color(0xFF00BFA5),
                   ),
-                ),
-              ),
-              title: Text(
-                word.word, // Arabcha so'z
-                textAlign: TextAlign.right,
-                style: textTheme.bodyLarge?.copyWith(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              subtitle: Text(
-                word.translation,
-                style: textTheme.bodyMedium?.copyWith(fontSize: 16),
-              ),
-              trailing: Icon(
-                Icons.navigate_next_rounded,
-                color: Theme.of(
-                  context,
-                ).colorScheme.primary.withValues(alpha: 0.5),
+                  const SizedBox(height: 20),
+                  Text(
+                    "Ilova haqida ma'lumot",
+                    style: textTheme.headlineMedium,
+                  ),
+                  const SizedBox(height: 15),
+                  Text(
+                    "“An-Na’im al-Kubro” lug’ati arab tilini o'rganuvchilar va tadqiqotchilar uchun mo'ljallangan yirik hajmli manbadur.\n\nSiz bu ilova orqali lug'at tarkibidagi barcha so'zlarni 3ta asosiy guruhga ajratilgan holda ko'rishingiz mumkin: Fellar, Ismlar va Harflar. \n\nIlovadagi Qidiruv bo'limi sizga so'zni arabcha yoki o'zbekcha tarjimasiga ko'ra oson va tez topish imkonini beradi. Shuningdek, murakkab va fuzzy search (o'xshashlik) rejimlari ham mavjud.",
+                    textAlign: TextAlign.justify,
+                    style: textTheme.bodyLarge!.copyWith(height: 1.6),
+                  ),
+                  const SizedBox(height: 30),
+                  Text("Versiya: 1.0.0", style: textTheme.bodyMedium),
+                ],
               ),
             ),
-          ),
-        ),
-      );
-    },
-  );
+          ],
+        );
+      },
+    );
+  }
 }
-
-void _onWordTapped(DictionaryWord word) {}
