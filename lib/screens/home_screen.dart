@@ -393,17 +393,12 @@ class _HomeScreenState extends State<HomeScreen> {
                 borderSide: BorderSide.none,
               ),
               filled: true,
-              fillColor: const Color(
-                0xFFF3F3F3,
-              ), // Taqdim etgan suratlardagi mayin kulrang
+              fillColor: const Color(0xFFF3F3F3),
             ),
           ),
         ),
 
-        // 2. Qidiruv rejimlari (image_3.png kabi moslashtirilgan ko'rinish)
-        // Qidiruv rejimlari card olib tashlandi (legacy code removed)
-
-        // 3. Qidiruv natijasi
+        // 2. Qidiruv natijalari
         Expanded(
           child: _searchResult.isEmpty
               ? Center(
@@ -412,7 +407,21 @@ class _HomeScreenState extends State<HomeScreen> {
                     style: textTheme.bodyMedium,
                   ),
                 )
-              : _buildWordList(_searchResult, textTheme, _onWordTapped),
+              : ListView.builder(
+                  itemCount: _searchResult.length,
+                  itemBuilder: (context, index) {
+                    final word = _searchResult[index];
+                    // Replace with your word card or tile
+                    return ListTile(
+                      title: Text(word.word ?? '', style: textTheme.bodyLarge),
+                      subtitle: Text(
+                        word.translation ?? '',
+                        style: textTheme.bodyMedium,
+                      ),
+                      onTap: () => _onWordTapped(word),
+                    );
+                  },
+                ),
         ),
       ],
     );
@@ -543,7 +552,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 trailing: const Icon(Icons.open_in_new, color: Colors.green),
                 onTap: () async {
-                  final url = Uri.parse("https://safemediaofficial-d25fa.web.app");
+                  final url = Uri.parse(
+                    "https://safemediaofficial-d25fa.web.app",
+                  );
                   await launchUrl(url, mode: LaunchMode.externalApplication);
                 },
               ),
@@ -573,37 +584,49 @@ class _HomeScreenState extends State<HomeScreen> {
                       ],
                     ),
                     const SizedBox(height: 14),
-                    // Search mode toggles
-                    Row(
+                    // Search mode toggles (responsive)
+                    Wrap(
+                      spacing: 20,
+                      runSpacing: 10,
+                      alignment: WrapAlignment.spaceBetween,
                       children: [
-                        const Icon(Icons.search, color: Colors.blue),
-                        const SizedBox(width: 8),
-                        Text("Aniq moslik:", style: textTheme.bodyMedium),
-                        const SizedBox(width: 8),
-                        Switch(
-                          value: _isExactSearch,
-                          activeThumbColor: Colors.green,
-                          onChanged: (val) async {
-                            await PreferencesManager.saveExactSearch(val);
-                            setState(() {
-                              _isExactSearch = val;
-                            });
-                          },
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.search, color: Colors.blue),
+                            const SizedBox(width: 8),
+                            Text("Aniq moslik:", style: textTheme.bodyMedium),
+                            const SizedBox(width: 8),
+                            Switch(
+                              value: _isExactSearch,
+                              activeThumbColor: Colors.green,
+                              onChanged: (val) async {
+                                await PreferencesManager.saveExactSearch(val);
+                                setState(() {
+                                  _isExactSearch = val;
+                                });
+                              },
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 18),
-                        const Icon(Icons.blur_on, color: Colors.deepPurple),
-                        const SizedBox(width: 8),
-                        Text("O'xshashlik:", style: textTheme.bodyMedium),
-                        const SizedBox(width: 8),
-                        Switch(
-                          value: _isFuzzySearch,
-                          activeThumbColor: Colors.deepPurple,
-                          onChanged: (val) async {
-                            await PreferencesManager.saveFuzzySearch(val);
-                            setState(() {
-                              _isFuzzySearch = val;
-                            });
-                          },
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.blur_on, color: Colors.deepPurple),
+                            const SizedBox(width: 8),
+                            Text("O'xshashlik:", style: textTheme.bodyMedium),
+                            const SizedBox(width: 8),
+                            Switch(
+                              value: _isFuzzySearch,
+                              activeThumbColor: Colors.deepPurple,
+                              onChanged: (val) async {
+                                await PreferencesManager.saveFuzzySearch(val);
+                                setState(() {
+                                  _isFuzzySearch = val;
+                                });
+                              },
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -721,7 +744,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 trailing: const Icon(Icons.open_in_new, color: Colors.black),
                 onTap: () async {
-                  final url = Uri.parse("https://ilmyolida.github.io/");
+                  final url = Uri.parse(
+                    "https://ilmyolida.github.io/SafeMediaOfficial/",
+                  );
                   await launchUrl(url, mode: LaunchMode.externalApplication);
                 },
               ),
