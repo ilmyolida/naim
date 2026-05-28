@@ -54,7 +54,7 @@ class _GroupWordsScreenState extends State<GroupWordsScreen> {
                 prefixIcon: const Icon(Icons.search),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(18), borderSide: BorderSide.none),
                 filled: true,
-                fillColor: Theme.of(context).colorScheme.surface.withOpacity(0.08),
+                fillColor: Theme.of(context).colorScheme.surface.withValues(alpha: 0.08),
               ),
             ),
           ),

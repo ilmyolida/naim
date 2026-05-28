@@ -5,56 +5,57 @@ import '../models/word_model.dart';
 /// Ilovaning holatini (Settings, History) xotirada saqlash va yuklash klassi.
 /// Bu klass orqali ilova yopilib ochilganda ma'lumotlar yo'qolmaydi.
 class PreferencesManager {
-    static const String _keyFavorites = 'favorites';
-    static const String _keySaved = 'saved_words';
+  static const String _keyFavorites = 'favorites';
+  static const String _keySaved = 'saved_words';
 
-    // --- Sevimlilar boshqaruvi ---
-    static List<DictionaryWord> loadFavorites() {
-      final jsonStrList = _prefs.getStringList(_keyFavorites) ?? [];
-      return jsonStrList
-          .map((jsonStr) => DictionaryWord.fromJson(jsonDecode(jsonStr)))
-          .toList();
-    }
+  // --- Sevimlilar boshqaruvi ---
+  static List<DictionaryWord> loadFavorites() {
+    final jsonStrList = _prefs.getStringList(_keyFavorites) ?? [];
+    return jsonStrList
+        .map((jsonStr) => DictionaryWord.fromJson(jsonDecode(jsonStr)))
+        .toList();
+  }
 
-    static Future<void> addToFavorites(DictionaryWord word) async {
-      List<DictionaryWord> current = loadFavorites();
-      if (!current.contains(word)) {
-        current.insert(0, word);
-        final jsonStrList = current.map((w) => jsonEncode(w.toJson())).toList();
-        await _prefs.setStringList(_keyFavorites, jsonStrList);
-      }
-    }
-
-    static Future<void> removeFromFavorites(DictionaryWord word) async {
-      List<DictionaryWord> current = loadFavorites();
-      current.remove(word);
+  static Future<void> addToFavorites(DictionaryWord word) async {
+    List<DictionaryWord> current = loadFavorites();
+    if (!current.contains(word)) {
+      current.insert(0, word);
       final jsonStrList = current.map((w) => jsonEncode(w.toJson())).toList();
       await _prefs.setStringList(_keyFavorites, jsonStrList);
     }
+  }
 
-    // --- Saqlanganlar boshqaruvi ---
-    static List<DictionaryWord> loadSaved() {
-      final jsonStrList = _prefs.getStringList(_keySaved) ?? [];
-      return jsonStrList
-          .map((jsonStr) => DictionaryWord.fromJson(jsonDecode(jsonStr)))
-          .toList();
-    }
+  static Future<void> removeFromFavorites(DictionaryWord word) async {
+    List<DictionaryWord> current = loadFavorites();
+    current.remove(word);
+    final jsonStrList = current.map((w) => jsonEncode(w.toJson())).toList();
+    await _prefs.setStringList(_keyFavorites, jsonStrList);
+  }
 
-    static Future<void> addToSaved(DictionaryWord word) async {
-      List<DictionaryWord> current = loadSaved();
-      if (!current.contains(word)) {
-        current.insert(0, word);
-        final jsonStrList = current.map((w) => jsonEncode(w.toJson())).toList();
-        await _prefs.setStringList(_keySaved, jsonStrList);
-      }
-    }
+  // --- Saqlanganlar boshqaruvi ---
+  static List<DictionaryWord> loadSaved() {
+    final jsonStrList = _prefs.getStringList(_keySaved) ?? [];
+    return jsonStrList
+        .map((jsonStr) => DictionaryWord.fromJson(jsonDecode(jsonStr)))
+        .toList();
+  }
 
-    static Future<void> removeFromSaved(DictionaryWord word) async {
-      List<DictionaryWord> current = loadSaved();
-      current.remove(word);
+  static Future<void> addToSaved(DictionaryWord word) async {
+    List<DictionaryWord> current = loadSaved();
+    if (!current.contains(word)) {
+      current.insert(0, word);
       final jsonStrList = current.map((w) => jsonEncode(w.toJson())).toList();
       await _prefs.setStringList(_keySaved, jsonStrList);
     }
+  }
+
+  static Future<void> removeFromSaved(DictionaryWord word) async {
+    List<DictionaryWord> current = loadSaved();
+    current.remove(word);
+    final jsonStrList = current.map((w) => jsonEncode(w.toJson())).toList();
+    await _prefs.setStringList(_keySaved, jsonStrList);
+  }
+
   static const String _keyHistory = 'search_history';
   static const String _keyThemeMode = 'theme_mode'; // 0: Light, 1: Soft Cream
   static const String _keyExactSearch = 'exact_search';
@@ -82,9 +83,9 @@ class PreferencesManager {
   // Tarixga yangi so'zni qo'shish funksiyasi (500 limit)
   static Future<void> addToHistory(DictionaryWord word) async {
     List<DictionaryWord> currentHistory = loadHistory();
-    
+
     // Agar bu so'z allaqachon bo'lsa, uni o'chirib boshiga o'tkazamiz (most recent)
-    currentHistory.remove(word); 
+    currentHistory.remove(word);
     currentHistory.insert(0, word);
 
     // Agar limit oshsa, eng oxirgisini o'chiramiz
@@ -93,7 +94,9 @@ class PreferencesManager {
     }
 
     // Yangi tarixni JSON formatiga o'tkazib saqlaymiz
-    final jsonStrList = currentHistory.map((word) => jsonEncode(word.toJson())).toList();
+    final jsonStrList = currentHistory
+        .map((word) => jsonEncode(word.toJson()))
+        .toList();
     await _prefs.setStringList(_keyHistory, jsonStrList);
   }
 
@@ -111,7 +114,7 @@ class PreferencesManager {
 
   // Mavzu rejimini yuklash (standart holda 0 - light)
   static int loadThemeMode() {
-    return _prefs.getInt(_keyThemeMode) ?? 0; 
+    return _prefs.getInt(_keyThemeMode) ?? 0;
   }
 
   // --- Qidiruv Sozlamalari boshqaruvi ---
@@ -119,10 +122,12 @@ class PreferencesManager {
   static Future<void> saveExactSearch(bool value) async {
     await _prefs.setBool(_keyExactSearch, value);
   }
+
   static bool loadExactSearch() => _prefs.getBool(_keyExactSearch) ?? false;
 
   static Future<void> saveFuzzySearch(bool value) async {
     await _prefs.setBool(_keyFuzzySearch, value);
   }
+
   static bool loadFuzzySearch() => _prefs.getBool(_keyFuzzySearch) ?? true;
 }
