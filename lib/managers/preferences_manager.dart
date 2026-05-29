@@ -5,6 +5,11 @@ import '../models/word_model.dart';
 /// Ilovaning holatini (Settings, History) xotirada saqlash va yuklash klassi.
 /// Bu klass orqali ilova yopilib ochilganda ma'lumotlar yo'qolmaydi.
 class PreferencesManager {
+    // --- Wrapper methods for compatibility with UI code ---
+    static Future<void> addFavorite(DictionaryWord word) => addToFavorites(word);
+    static Future<void> removeFavorite(DictionaryWord word) => removeFromFavorites(word);
+    static Future<void> addSaved(DictionaryWord word) => addToSaved(word);
+    static Future<void> removeSaved(DictionaryWord word) => removeFromSaved(word);
   static const String _keyFavorites = 'favorites';
   static const String _keySaved = 'saved_words';
 

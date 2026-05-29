@@ -20,6 +20,11 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+    // Card color getter for all themes
+    Color get cardColor {
+      if (_themeMode == 2) return const Color(0xFF23272A); // Dark
+      return Colors.white;
+    }
   // bool _agreementAccepted = false; // Olib tashlandi, ishlatilmaydi
   // Sevimlilar va saqlanganlar uchun ro'yxatlar
   List<DictionaryWord> _favorites = [];
@@ -207,8 +212,8 @@ class _HomeScreenState extends State<HomeScreen> {
     for (var word in _allWords) {
       bool isMatch = false;
       // Normalize both word and translation for robust matching
-      final wordText = (word.word ?? '').toLowerCase();
-      final translationText = (word.translation ?? '').toLowerCase();
+      final wordText = (word.word ?? "").toLowerCase();
+      final translationText = (word.translation ?? "").toLowerCase();
 
       // 1. Exact match (handles all scripts)
       if (_isExactSearch) {
@@ -247,15 +252,18 @@ class _HomeScreenState extends State<HomeScreen> {
   void _onWordTapped(DictionaryWord word) {
     // 1. Tarixga saqlash (PreferencesManager orqali)
     PreferencesManager.addToHistory(word);
-
-    // 2. Tafsilotlar ekraniga o'tish
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => WordDetailsScreen(word: word)),
-    ).then((_) {
-      // Ekranga qaytganda tarix ro'yxatini yangilash
-      setState(() {
-        _historyResult = PreferencesManager.loadHistory();
+    // 2. Tafsilotlar ekraniga o'tish (safe navigation)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => WordDetailsScreen(word: word)),
+      ).then((_) {
+        if (!mounted) return;
+        setState(() {
+          _historyResult = PreferencesManager.loadHistory();
+          _favorites = PreferencesManager.loadFavorites();
+          _saved = PreferencesManager.loadSaved();
+        });
       });
     });
   }
@@ -270,13 +278,25 @@ class _HomeScreenState extends State<HomeScreen> {
         : ThemeData.dark();
     final textTheme = theme.textTheme;
 
+    // Set background color based on theme
+    final scaffoldBg = _themeMode == 2
+        ? const Color(0xFF181A1B) // Dark mode: deep dark
+        : _themeMode == 1
+            ? const Color(0xFFFFF8E1) // Cream/Read mode: soft yellow
+            : const Color(0xFFFDFBF5); // Light mode: ivory
+
+    // Card color based on theme
+    final cardColor = _themeMode == 2
+        ? const Color(0xFF23272A) // Dark mode: dark card
+        : Colors.white; // Light/Cream: white card
+
     return Theme(
-      data: theme, // Butun ekranni mavzuga moslash
+      data: theme,
       child: Scaffold(
+        backgroundColor: scaffoldBg,
         appBar: AppBar(
           title: Text("An-Na’im al-Kubro", style: textTheme.headlineMedium),
           actions: [
-            // Rejimni o'zgartirish knopkasi (Yuqorida)
             IconButton(
               icon: Icon(
                 PreferencesManager.loadThemeMode() == 0
@@ -285,9 +305,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               onPressed: () {
                 int currentMode = PreferencesManager.loadThemeMode();
-                int nextMode = currentMode == 0
-                    ? 1
-                    : 0; // Light (0) -> Cream (1)
+                int nextMode = currentMode == 0 ? 1 : 0;
                 PreferencesManager.saveThemeMode(nextMode).then((_) {
                   setState(() {});
                 });
@@ -398,41 +416,242 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
 
-        // 2. Qidiruv natijalari
-        Expanded(
-          child: _searchResult.isEmpty
-              ? Center(
-                  child: Text(
-                    "Hech nima topilmadi.",
-                    style: textTheme.bodyMedium,
-                  ),
-                )
-              : ListView.builder(
-                  itemCount: _searchResult.length,
-                  itemBuilder: (context, index) {
-                    final word = _searchResult[index];
-                    // Replace with your word card or tile
-                    return ListTile(
-                      title: Text(word.word ?? '', style: textTheme.bodyLarge),
-                      subtitle: Text(
-                        word.translation ?? '',
-                        style: textTheme.bodyMedium,
-                      ),
-                      onTap: () => _onWordTapped(word),
-                    );
-                  },
-                ),
-        ),
+        // 2. Qidiruv natijalari (Javohir style, robust)
+        Expanded(child: _buildSearchResults(_searchResult, textTheme, context)),
       ],
     );
   }
 
+  /// Robust, beautiful search results (Javohir style)
+  Widget _buildSearchResults(
+    List<DictionaryWord>? results,
+    TextTheme textTheme,
+    BuildContext context,
+  ) {
+    if (results == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (results.isEmpty) {
+      return Center(
+        child: Text("Hech narsa topilmadi", style: textTheme.bodyMedium),
+      );
+    }
+    return ListView.builder(
+      itemCount: results.length,
+      padding: const EdgeInsets.all(10),
+      itemBuilder: (context, index) {
+        final word = results[index];
+        final isFav = _favorites.any((w) => w.id == word.id);
+        final isSaved = _saved.any((w) => w.id == word.id);
+        return Card(
+          color: cardColor,
+          elevation: 3,
+          margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 5),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(20),
+            onTap: () {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                _showJewelDetail(context, word);
+              });
+            },
+            child: Padding(
+              padding: const EdgeInsets.all(15),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          IconButton(
+                            icon: Icon(isFav ? Icons.favorite : Icons.favorite_border, color: Colors.redAccent),
+                            tooltip: isFav ? 'Sevimlidan olib tashlash' : 'Sevimlilarga qo‘shish',
+                            onPressed: () {
+                              setState(() {
+                                if (isFav) {
+                                  PreferencesManager.removeFavorite(word);
+                                  _favorites = PreferencesManager.loadFavorites();
+                                } else {
+                                  PreferencesManager.addFavorite(word);
+                                  _favorites = PreferencesManager.loadFavorites();
+                                }
+                              });
+                            },
+                          ),
+                          IconButton(
+                            icon: Icon(isSaved ? Icons.bookmark : Icons.bookmark_border, color: Colors.amber[800]),
+                            tooltip: isSaved ? 'Saqlanganlardan olib tashlash' : 'Saqlanganlarga qo‘shish',
+                            onPressed: () {
+                              setState(() {
+                                if (isSaved) {
+                                  PreferencesManager.removeSaved(word);
+                                  _saved = PreferencesManager.loadSaved();
+                                } else {
+                                  PreferencesManager.addSaved(word);
+                                  _saved = PreferencesManager.loadSaved();
+                                }
+                              });
+                            },
+                          ),
+                        ],
+                      ),
+                      Flexible(
+                        child: Text(
+                          word.word ?? "",
+                          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.teal),
+                          textAlign: TextAlign.right,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const Divider(height: 20),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      word.translation ?? "",
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 16, color: Colors.black87),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  /// Show details as beautiful bottom sheet (Javohir style)
+  void _showJewelDetail(BuildContext context, DictionaryWord word) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.6,
+        maxChildSize: 0.9,
+        expand: false,
+        builder: (_, controller) => Container(
+          decoration: const BoxDecoration(
+            color: Color(0xFFF9F5E9),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+          ),
+          child: ListView(
+            controller: controller,
+            children: [
+              const SizedBox(height: 12),
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Text(
+                  word.word ?? '',
+                  style: const TextStyle(
+                    fontSize: 32,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.teal,
+                  ),
+                  textAlign: TextAlign.right,
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 10,
+                ),
+                child: Text(
+                  word.translation ?? '',
+                  style: const TextStyle(fontSize: 20, color: Colors.black87),
+                  textAlign: TextAlign.left,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   // ignore: strict_top_level_inference
-  _buildWordList(
+  Widget _buildWordList(
     List<DictionaryWord> historyResult,
     TextTheme textTheme,
     void Function(DictionaryWord word) onWordTapped,
-  ) {}
+  ) {
+    return ListView.builder(
+      padding: const EdgeInsets.all(10),
+      itemCount: historyResult.length,
+      itemBuilder: (context, index) {
+        final word = historyResult[index];
+        final isFav = _favorites.any((w) => w.id == word.id);
+        final isSaved = _saved.any((w) => w.id == word.id);
+        return Card(
+          color: cardColor,
+          elevation: 3,
+          margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 5),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          child: ListTile(
+            title: Text(
+              word.word ?? "",
+              style: const TextStyle(fontWeight: FontWeight.bold),
+              textAlign: TextAlign.right,
+              overflow: TextOverflow.ellipsis,
+            ),
+            subtitle: Text(word.translation ?? "", style: textTheme.bodyMedium),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: Icon(isFav ? Icons.favorite : Icons.favorite_border, color: Colors.redAccent),
+                  tooltip: isFav ? 'Sevimlidan olib tashlash' : 'Sevimlilarga qo‘shish',
+                  onPressed: () {
+                    setState(() {
+                      if (isFav) {
+                        PreferencesManager.removeFavorite(word);
+                        _favorites = PreferencesManager.loadFavorites();
+                      } else {
+                        PreferencesManager.addFavorite(word);
+                        _favorites = PreferencesManager.loadFavorites();
+                      }
+                    });
+                  },
+                ),
+                IconButton(
+                  icon: Icon(isSaved ? Icons.bookmark : Icons.bookmark_border, color: Colors.amber[800]),
+                  tooltip: isSaved ? 'Saqlanganlardan olib tashlash' : 'Saqlanganlarga qo‘shish',
+                  onPressed: () {
+                    setState(() {
+                      if (isSaved) {
+                        PreferencesManager.removeSaved(word);
+                        _saved = PreferencesManager.loadSaved();
+                      } else {
+                        PreferencesManager.addSaved(word);
+                        _saved = PreferencesManager.loadSaved();
+                      }
+                    });
+                  },
+                ),
+              ],
+            ),
+            onTap: () => onWordTapped(word),
+          ),
+        );
+      },
+    );
+  }
 
   /// Guruhlar ro'yxati ko'rsatilgan sahifa (image_0.png kabi)
   Widget _buildGroupsPage(

@@ -26,9 +26,14 @@ class DataService {
             String meaning = line.replaceAll(arabic, '').trim();
             meaning = meaning.replaceAll(RegExp(r'\[U\+[0-9A-F]+\]'), '').trim();
 
-            // WordType aniqlash mantiqi
-            WordType type = WordType.ism; 
-            if (meaning.endsWith('мок') || meaning.contains(' мок')) {
+            // Improved WordType detection
+            WordType type = WordType.ism;
+            final arabicTrimmed = arabic.trim();
+            final translationTrimmed = meaning.trim();
+            // Only classify as fel if translation ends with 'мок' or 'моқ' and arabic does NOT start with 'ال'
+            final isVerbUz = translationTrimmed.endsWith('мок') || translationTrimmed.endsWith('моқ');
+            final isNotAl = !(arabicTrimmed.startsWith('ال') || arabicTrimmed.startsWith('اَل'));
+            if (isVerbUz && isNotAl) {
               type = WordType.fel;
             } else if (line.contains('...')) {
               type = WordType.harf;
