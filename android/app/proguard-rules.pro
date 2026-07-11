@@ -5,7 +5,6 @@
 -keep class io.flutter.** { *; }
 -keep class io.flutter.plugins.** { *; }
 
-keep class 
-dev.fluttercommunity.plus.share.** { *; }
--keep class
-androidx.core.content.FileProvider { *; }
+-keep class dev.fluttercommunity.plus.share.** { *; }
+-keep class androidx.core.content.FileProvider { *; }
+-keepnames class kotlin.Metadata { *; }

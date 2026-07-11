@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "662027997687",
+    "project_id": "naim-7bca7",
+    "storage_bucket": "naim-7bca7.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:662027997687:android:e678abc15e9cec2a99def2",
+        "android_client_info": {
+          "package_name": "an.naim.library"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "662027997687-gpgt76tdof83e1ikrj2krhrtru6lh38h.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAx9-BetOAh_VVeH9OB4ekERyT_loq5me8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "662027997687-gpgt76tdof83e1ikrj2krhrtru6lh38h.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "662027997687-8r33oe07b2r4ejlkmfrii344cet1fqqo.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "an.naim.library"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

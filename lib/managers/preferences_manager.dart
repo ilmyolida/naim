@@ -1,129 +1,84 @@
-import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/word_model.dart';
+import '../services/database_service.dart';
 
-/// Ilovaning holatini (Settings, History) xotirada saqlash va yuklash klassi.
-/// Bu klass orqali ilova yopilib ochilganda ma'lumotlar yo'qolmaydi.
+/// Ilovaning holatini va lokal bazani boshqaruvchi klass.
+/// Endi tarix, sevimlilar va saqlanganlar SQLite bazasida saqlanadi.
 class PreferencesManager {
-    // --- Wrapper methods for compatibility with UI code ---
-    static Future<void> addFavorite(DictionaryWord word) => addToFavorites(word);
-    static Future<void> removeFavorite(DictionaryWord word) => removeFromFavorites(word);
-    static Future<void> addSaved(DictionaryWord word) => addToSaved(word);
-    static Future<void> removeSaved(DictionaryWord word) => removeFromSaved(word);
-  static const String _keyFavorites = 'favorites';
-  static const String _keySaved = 'saved_words';
-
-  // --- Sevimlilar boshqaruvi ---
-  static List<DictionaryWord> loadFavorites() {
-    final jsonStrList = _prefs.getStringList(_keyFavorites) ?? [];
-    return jsonStrList
-        .map((jsonStr) => DictionaryWord.fromJson(jsonDecode(jsonStr)))
-        .toList();
-  }
-
-  static Future<void> addToFavorites(DictionaryWord word) async {
-    List<DictionaryWord> current = loadFavorites();
-    if (!current.contains(word)) {
-      current.insert(0, word);
-      final jsonStrList = current.map((w) => jsonEncode(w.toJson())).toList();
-      await _prefs.setStringList(_keyFavorites, jsonStrList);
-    }
-  }
-
-  static Future<void> removeFromFavorites(DictionaryWord word) async {
-    List<DictionaryWord> current = loadFavorites();
-    current.remove(word);
-    final jsonStrList = current.map((w) => jsonEncode(w.toJson())).toList();
-    await _prefs.setStringList(_keyFavorites, jsonStrList);
-  }
-
-  // --- Saqlanganlar boshqaruvi ---
-  static List<DictionaryWord> loadSaved() {
-    final jsonStrList = _prefs.getStringList(_keySaved) ?? [];
-    return jsonStrList
-        .map((jsonStr) => DictionaryWord.fromJson(jsonDecode(jsonStr)))
-        .toList();
-  }
-
-  static Future<void> addToSaved(DictionaryWord word) async {
-    List<DictionaryWord> current = loadSaved();
-    if (!current.contains(word)) {
-      current.insert(0, word);
-      final jsonStrList = current.map((w) => jsonEncode(w.toJson())).toList();
-      await _prefs.setStringList(_keySaved, jsonStrList);
-    }
-  }
-
-  static Future<void> removeFromSaved(DictionaryWord word) async {
-    List<DictionaryWord> current = loadSaved();
-    current.remove(word);
-    final jsonStrList = current.map((w) => jsonEncode(w.toJson())).toList();
-    await _prefs.setStringList(_keySaved, jsonStrList);
-  }
-
-  static const String _keyHistory = 'search_history';
-  static const String _keyThemeMode = 'theme_mode'; // 0: Light, 1: Soft Cream
+  static const String _keyThemeMode = 'theme_mode'; // 0: Light, 1: Soft Cream, 2: Dark
   static const String _keyExactSearch = 'exact_search';
   static const String _keyFuzzySearch = 'fuzzy_search';
 
   static late SharedPreferences _prefs;
+  static List<DictionaryWord> _favoritesCache = [];
+  static List<DictionaryWord> _savedCache = [];
+  static List<DictionaryWord> _historyCache = [];
 
-  // SharedPreferences'ni bir marta initializatsiya qilish funksiyasi (main.dart da chaqiriladi)
   static Future<void> init() async {
     _prefs = await SharedPreferences.getInstance();
+    await DatabaseService.init();
+    _favoritesCache = await DatabaseService.loadFavorites();
+    _savedCache = await DatabaseService.loadSavedWords();
+    _historyCache = await DatabaseService.loadHistory();
   }
 
-  // --- Qidiruv Tarixini boshqarish ---
+  // --- Wrapper methods for compatibility with UI code ---
+  static Future<void> addFavorite(DictionaryWord word) => addToFavorites(word);
+  static Future<void> removeFavorite(DictionaryWord word) => removeFromFavorites(word);
+  static Future<void> addSaved(DictionaryWord word) => addToSaved(word);
+  static Future<void> removeSaved(DictionaryWord word) => removeFromSaved(word);
 
-  // Xotiradan 500ta qidiruv tarixini yuklash funksiyasi
-  static List<DictionaryWord> loadHistory() {
-    // JSON stringini olamiz
-    final jsonStrList = _prefs.getStringList(_keyHistory) ?? [];
-    // Har bir stringni qaytadan DictionaryWord modeliga o'tkazamiz
-    return jsonStrList
-        .map((jsonStr) => DictionaryWord.fromJson(jsonDecode(jsonStr)))
-        .toList();
+  // --- Sevimlilar boshqaruvi ---
+  static List<DictionaryWord> loadFavorites() => List.unmodifiable(_favoritesCache);
+
+  static Future<void> addToFavorites(DictionaryWord word) async {
+    if (_favoritesCache.any((w) => w.id == word.id)) return;
+    await DatabaseService.addToFavorites(word);
+    _favoritesCache = await DatabaseService.loadFavorites();
   }
 
-  // Tarixga yangi so'zni qo'shish funksiyasi (500 limit)
+  static Future<void> removeFromFavorites(DictionaryWord word) async {
+    await DatabaseService.removeFromFavorites(word);
+    _favoritesCache.removeWhere((w) => w.id == word.id);
+  }
+
+  // --- Saqlanganlar boshqaruvi ---
+  static List<DictionaryWord> loadSaved() => List.unmodifiable(_savedCache);
+
+  static Future<void> addToSaved(DictionaryWord word) async {
+    if (_savedCache.any((w) => w.id == word.id)) return;
+    await DatabaseService.addToSaved(word);
+    _savedCache = await DatabaseService.loadSavedWords();
+  }
+
+  static Future<void> removeFromSaved(DictionaryWord word) async {
+    await DatabaseService.removeFromSaved(word);
+    _savedCache.removeWhere((w) => w.id == word.id);
+  }
+
+  // --- Qidiruv Tarixi boshqaruvi ---
+  static List<DictionaryWord> loadHistory() => List.unmodifiable(_historyCache);
+
   static Future<void> addToHistory(DictionaryWord word) async {
-    List<DictionaryWord> currentHistory = loadHistory();
-
-    // Agar bu so'z allaqachon bo'lsa, uni o'chirib boshiga o'tkazamiz (most recent)
-    currentHistory.remove(word);
-    currentHistory.insert(0, word);
-
-    // Agar limit oshsa, eng oxirgisini o'chiramiz
-    if (currentHistory.length > 500) {
-      currentHistory.removeLast();
-    }
-
-    // Yangi tarixni JSON formatiga o'tkazib saqlaymiz
-    final jsonStrList = currentHistory
-        .map((word) => jsonEncode(word.toJson()))
-        .toList();
-    await _prefs.setStringList(_keyHistory, jsonStrList);
+    await DatabaseService.addToHistory(word);
+    _historyCache = await DatabaseService.loadHistory();
   }
 
-  // Tarixni butunlay o'chirish
   static Future<void> clearHistory() async {
-    await _prefs.remove(_keyHistory);
+    await DatabaseService.clearHistory();
+    _historyCache = [];
   }
 
   // --- Ilova Rejimlari boshqaruvi ---
-
-  // Mavzu rejimini saqlash (0: light, 1: cream)
   static Future<void> saveThemeMode(int modeIndex) async {
     await _prefs.setInt(_keyThemeMode, modeIndex);
   }
 
-  // Mavzu rejimini yuklash (standart holda 0 - light)
   static int loadThemeMode() {
     return _prefs.getInt(_keyThemeMode) ?? 0;
   }
 
   // --- Qidiruv Sozlamalari boshqaruvi ---
-
   static Future<void> saveExactSearch(bool value) async {
     await _prefs.setBool(_keyExactSearch, value);
   }

@@ -6,7 +6,7 @@ import '../models/word_model.dart';
 import '../managers/preferences_manager.dart';
 import '../app_theme.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../services/data_service.dart';
+import '../services/database_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'group_words_screen.dart';
 
@@ -20,11 +20,12 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-    // Card color getter for all themes
-    Color get cardColor {
-      if (_themeMode == 2) return const Color(0xFF23272A); // Dark
-      return Colors.white;
-    }
+  // Card color getter for all themes
+  Color get cardColor {
+    if (_themeMode == 2) return const Color(0xFF23272A); // Dark
+    return Colors.white;
+  }
+
   // bool _agreementAccepted = false; // Olib tashlandi, ishlatilmaydi
   // Sevimlilar va saqlanganlar uchun ro'yxatlar
   List<DictionaryWord> _favorites = [];
@@ -125,7 +126,8 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _loadAllData() async {
-    final data = await DataService.loadAllData(); // TXT fayllardan o'qiydi
+    await DatabaseService.init();
+    final data = await DatabaseService.loadAllWords();
     setState(() {
       _allWords = data;
       _historyResult = PreferencesManager.loadHistory();
@@ -198,7 +200,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// Qidiruv logikasi: Kirish matniga ko'ra so'zlarni filtrlaydi.
   /// Matn o'zgargan har gal chaqiriladi.
-  void _performSearch(String query) {
+  Future<void> _performSearch(String query) async {
     if (query.trim().isEmpty) {
       setState(() {
         _searchResult = [];
@@ -206,45 +208,15 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
-    final normalizedQuery = query.trim().toLowerCase();
-    List<DictionaryWord> filteredWords = [];
+    final results = await DatabaseService.searchWords(
+      query,
+      _isExactSearch,
+      _isFuzzySearch,
+    );
 
-    for (var word in _allWords) {
-      bool isMatch = false;
-      // Normalize both word and translation for robust matching
-      final wordText = (word.word ?? "").toLowerCase();
-      final translationText = (word.translation ?? "").toLowerCase();
-
-      // 1. Exact match (handles all scripts)
-      if (_isExactSearch) {
-        if (wordText == normalizedQuery || translationText == normalizedQuery) {
-          isMatch = true;
-        }
-      }
-
-      // 2. Fuzzy match (contains, Unicode-aware)
-      if (!isMatch && _isFuzzySearch) {
-        if (wordText.contains(normalizedQuery) ||
-            translationText.contains(normalizedQuery)) {
-          isMatch = true;
-        }
-        // Also match if query is a number and appears anywhere
-        if (!isMatch &&
-            normalizedQuery.runes.every((r) => r >= 0x30 && r <= 0x39)) {
-          if (wordText.contains(normalizedQuery) ||
-              translationText.contains(normalizedQuery)) {
-            isMatch = true;
-          }
-        }
-      }
-
-      if (isMatch) {
-        filteredWords.add(word);
-      }
-    }
-
+    if (!mounted) return;
     setState(() {
-      _searchResult = filteredWords;
+      _searchResult = results;
     });
   }
 
@@ -282,13 +254,8 @@ class _HomeScreenState extends State<HomeScreen> {
     final scaffoldBg = _themeMode == 2
         ? const Color(0xFF181A1B) // Dark mode: deep dark
         : _themeMode == 1
-            ? const Color(0xFFFFF8E1) // Cream/Read mode: soft yellow
-            : const Color(0xFFFDFBF5); // Light mode: ivory
-
-    // Card color based on theme
-    final cardColor = _themeMode == 2
-        ? const Color(0xFF23272A) // Dark mode: dark card
-        : Colors.white; // Light/Cream: white card
+        ? const Color(0xFFFFF8E1) // Cream/Read mode: soft yellow
+        : const Color(0xFFFDFBF5); // Light mode: ivory
 
     return Theme(
       data: theme,
@@ -447,7 +414,9 @@ class _HomeScreenState extends State<HomeScreen> {
           color: cardColor,
           elevation: 3,
           margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 5),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
           child: InkWell(
             borderRadius: BorderRadius.circular(20),
             onTap: () {
@@ -466,23 +435,35 @@ class _HomeScreenState extends State<HomeScreen> {
                       Row(
                         children: [
                           IconButton(
-                            icon: Icon(isFav ? Icons.favorite : Icons.favorite_border, color: Colors.redAccent),
-                            tooltip: isFav ? 'Sevimlidan olib tashlash' : 'Sevimlilarga qo‘shish',
+                            icon: Icon(
+                              isFav ? Icons.favorite : Icons.favorite_border,
+                              color: Colors.redAccent,
+                            ),
+                            tooltip: isFav
+                                ? 'Sevimlidan olib tashlash'
+                                : 'Sevimlilarga qo‘shish',
                             onPressed: () {
                               setState(() {
                                 if (isFav) {
                                   PreferencesManager.removeFavorite(word);
-                                  _favorites = PreferencesManager.loadFavorites();
+                                  _favorites =
+                                      PreferencesManager.loadFavorites();
                                 } else {
                                   PreferencesManager.addFavorite(word);
-                                  _favorites = PreferencesManager.loadFavorites();
+                                  _favorites =
+                                      PreferencesManager.loadFavorites();
                                 }
                               });
                             },
                           ),
                           IconButton(
-                            icon: Icon(isSaved ? Icons.bookmark : Icons.bookmark_border, color: Colors.amber[800]),
-                            tooltip: isSaved ? 'Saqlanganlardan olib tashlash' : 'Saqlanganlarga qo‘shish',
+                            icon: Icon(
+                              isSaved ? Icons.bookmark : Icons.bookmark_border,
+                              color: Colors.amber[800],
+                            ),
+                            tooltip: isSaved
+                                ? 'Saqlanganlardan olib tashlash'
+                                : 'Saqlanganlarga qo‘shish',
                             onPressed: () {
                               setState(() {
                                 if (isSaved) {
@@ -499,8 +480,12 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       Flexible(
                         child: Text(
-                          word.word ?? "",
-                          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.teal),
+                          word.word,
+                          style: const TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.teal,
+                          ),
                           textAlign: TextAlign.right,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -511,12 +496,16 @@ class _HomeScreenState extends State<HomeScreen> {
                   Align(
                     alignment: Alignment.centerLeft,
                     child: Text(
-                      word.translation ?? "",
+                      word.translation,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 16, color: Colors.black87),
+                      style: const TextStyle(
+                        fontSize: 16,
+                        color: Colors.black87,
+                      ),
                     ),
                   ),
+                  const SizedBox(height: 12),
                 ],
               ),
             ),
@@ -558,7 +547,7 @@ class _HomeScreenState extends State<HomeScreen> {
               Padding(
                 padding: const EdgeInsets.all(20),
                 child: Text(
-                  word.word ?? '',
+                  word.word,
                   style: const TextStyle(
                     fontSize: 32,
                     fontWeight: FontWeight.bold,
@@ -573,7 +562,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   vertical: 10,
                 ),
                 child: Text(
-                  word.translation ?? '',
+                  word.translation,
                   style: const TextStyle(fontSize: 20, color: Colors.black87),
                   textAlign: TextAlign.left,
                 ),
@@ -602,21 +591,28 @@ class _HomeScreenState extends State<HomeScreen> {
           color: cardColor,
           elevation: 3,
           margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 5),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
           child: ListTile(
             title: Text(
-              word.word ?? "",
+              word.word,
               style: const TextStyle(fontWeight: FontWeight.bold),
               textAlign: TextAlign.right,
               overflow: TextOverflow.ellipsis,
             ),
-            subtitle: Text(word.translation ?? "", style: textTheme.bodyMedium),
+            subtitle: Text(word.translation, style: textTheme.bodyMedium),
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 IconButton(
-                  icon: Icon(isFav ? Icons.favorite : Icons.favorite_border, color: Colors.redAccent),
-                  tooltip: isFav ? 'Sevimlidan olib tashlash' : 'Sevimlilarga qo‘shish',
+                  icon: Icon(
+                    isFav ? Icons.favorite : Icons.favorite_border,
+                    color: Colors.redAccent,
+                  ),
+                  tooltip: isFav
+                      ? 'Sevimlidan olib tashlash'
+                      : 'Sevimlilarga qo‘shish',
                   onPressed: () {
                     setState(() {
                       if (isFav) {
@@ -630,8 +626,13 @@ class _HomeScreenState extends State<HomeScreen> {
                   },
                 ),
                 IconButton(
-                  icon: Icon(isSaved ? Icons.bookmark : Icons.bookmark_border, color: Colors.amber[800]),
-                  tooltip: isSaved ? 'Saqlanganlardan olib tashlash' : 'Saqlanganlarga qo‘shish',
+                  icon: Icon(
+                    isSaved ? Icons.bookmark : Icons.bookmark_border,
+                    color: Colors.amber[800],
+                  ),
+                  tooltip: isSaved
+                      ? 'Saqlanganlardan olib tashlash'
+                      : 'Saqlanganlarga qo‘shish',
                   onPressed: () {
                     setState(() {
                       if (isSaved) {

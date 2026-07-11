@@ -2,6 +2,10 @@ subprojects {
     tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
         kotlinOptions {
             jvmTarget = "17"
+            freeCompilerArgs = freeCompilerArgs + listOf(
+                "-Xskip-metadata-version-check",
+                "-Xuse-deprecated-lambda-syntax"
+            )
         }
     }
 }
